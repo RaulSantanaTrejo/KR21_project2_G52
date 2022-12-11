@@ -1,4 +1,8 @@
+import itertools
 from typing import Union
+
+import networkx
+
 from BayesNet import BayesNet
 
 
@@ -27,8 +31,16 @@ class BNReasoner:
                 for child in variable_children:
                     change = True
                     self.bn.del_edge((variable, child))
-                    
+
         if change:
             return self.prune(queries, evidence)
+
+    def d_separation(self, X:[str], Y:[str], Z:[str]):
+        self.prune(X + Y, Z)
+        all_combinations = itertools.product(X,Y)
+        for (start, end) in all_combinations:
+            if networkx.has_path(self.bn.structure, start,end):
+                return False
+        return True
 
         # TODO: This is where your methods should go
