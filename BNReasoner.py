@@ -15,4 +15,20 @@ class BNReasoner:
         else:
             self.bn = net
 
-    # TODO: This is where your methods should go
+    def prune(self, queries: [str], evidence:[str]):
+        change = False
+        for variable in self.bn.get_all_variables():
+            # remove all leafs not in queries or evidence
+            variable_children = self.bn.get_children(variable)
+            if not variable_children and variable not in queries and variable not in evidence:
+                change = True
+                self.bn.del_var(variable)
+            if variable in evidence:
+                for child in variable_children:
+                    change = True
+                    self.bn.del_edge((variable, child))
+                    
+        if change:
+            return self.prune(queries, evidence)
+
+        # TODO: This is where your methods should go
