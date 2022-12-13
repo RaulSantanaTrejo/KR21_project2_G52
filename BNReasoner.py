@@ -129,77 +129,130 @@ class BNReasoner:
         return new_cpt
     
     
-    ### FACTOR MULTIPLICATION ###
-    
-    def factor_multiplication(self, set_of_cpts: List[pd.DataFrame]) -> pd.DataFrame:
+    def factor_multiplication(self, cpt_set: List[pd.DataFrame]) -> pd.DataFrame:
         """Input: a list of cpts 
            Output: result of factor moltiplication between the cpts"""
 
-        vars = []
-        
-        for cpt in set_of_cpts:
-            for column_header in list(cpt.columns)[:-1]:
-                if column_header not in vars:
-                    vars.append(column_header)
-        worlds = [list(i) for i in itertools.product([True, False], repeat=len(vars))]
-        instantions = []
+        var = []
+        insts = []
+        good_insts = []
+        good_vars = []
+
+        for cpt in cpt_set:
+            for col_head in list(cpt.columns)[:-1]:
+                if col_head not in var:
+                    var.append(col_head)
+
+        worlds = [list(i) for i in itertools.product([True, False], repeat=len(var))]
+
         for world in worlds:
             evi = {}
-            for i, v in enumerate(vars):
-                evi[v] = world[i]
-            instantions.append(pd.Series(evi))
-        good_instantions = []
-        for inst in instantions:
-            s = 0
-            for c in set_of_cpts:
-                if not BayesNet.get_compatible_instantiations_table(inst, c).empty:
+            for i, j in enumerate(var):
+                evi[j] = world[i]
+            insts.append(pd.Series(evi))
+        
+        for inst in insts:
+            s = 0 #score
+            for cpt in cpt_set:
+                if not BayesNet.get_compatible_instantiations_table(inst, cpt).empty:
                     s += 1
-            if s == len(set_of_cpts):
-                good_instantions.append(inst)
-        list_vars = [list(i.to_dict().keys()) for i in good_instantions]
-        good_vars = []
+            if s == len(cpt_set):
+                good_insts.append(inst)
+                
+        list_vars = [list(i.to_dict().keys()) for i in good_insts]
+        
         for i in list_vars:
-            for v in i:
-                if v not in good_vars:
-                    good_vars.append(v)
-        good_insts = [list(i.to_dict().values()) for i in good_instantions]
-        good_insts.sort()
-        good_insts = list(good_insts for good_insts, _ in
-                          itertools.groupby(good_insts)) 
-        result_cpt = pd.DataFrame(good_insts, columns=good_vars)
-        result_cpt['p'] = 1
-        for i in range(len(good_insts)):
-            inst = pd.Series(result_cpt.iloc[i][:-1], good_vars)
-            for current_cpt in set_of_cpts:
+            for j in i:
+                if j not in good_vars:
+                    good_vars.append(j)
+
+        good_insts_val = [list(i.to_dict().values()) for i in good_insts]
+        good_insts_val.sort()
+        good_insts_val = list(good_insts for good_insts, _ in
+                          itertools.groupby(good_insts_val)) 
+        cpt_results = pd.DataFrame(good_insts_val, columns=good_vars)
+        cpt_results['p'] = 1
+
+        for i in range(len(good_insts_val)):
+            inst = pd.Series(cpt_results.iloc[i][:-1], good_vars)
+            for current_cpt in cpt_set:
                 right_row = BayesNet.get_compatible_instantiations_table(inst, current_cpt)
-                result_cpt.loc[i, 'p'] *= right_row['p'].values[0]
-        return result_cpt
-    
-    def multiply_many_factors(self, factors: List[pd.DataFrame]) -> pd.DataFrame:
+                cpt_results.loc[i, 'p'] *= right_row['p'].values[0]
+        return cpt_results
+
+    def factor_multiplication_many(self, factors: List[pd.DataFrame]) -> pd.DataFrame:
         if len(factors) == 1:
             return factors[0]
         else:
             result = factors[0]
             for i in range(1, len(factors)):
-                common_vars = result.columns.intersection(factors[i].columns).tolist()
-                if 'p' in common_vars:
-                    common_vars.remove('p')
-                if "archive" in common_vars:
-                    common_vars.remove("archive")
-                if len(common_vars) > 0:
-                    result = self.multiply_factors(result, factors[i], common_vars)
+                c_vars = list(result.columns.intersection(factors[i].columns)) #common variables
+                if 'p' in c_vars:
+                    c_vars.remove('p')
+                if "archive" in c_vars:
+                    c_vars.remove("archive")
+                if len(c_vars) > 0:
+                    result = self.multiply_factors(result, factors[i], c_vars)
             return result
-
-    def multiply_factors(self, factor1: pd.DataFrame, factor2: pd.DataFrame,
-                         common_vars: List[str]) -> pd.DataFrame:
-        merged = factor1.merge(factor2, on=common_vars, how='inner')
+    
+    def multiply_factors(self, f1: pd.DataFrame, f2: pd.DataFrame, c_vars: List[str]) -> pd.DataFrame:
+        merged = f1.merge(f2, on=c_vars, how='inner')
         merged = merged.assign(p=merged.p_x * merged.p_y, ).drop(columns=['p_x', 'p_y'])
-        if "archive" in factor1.columns and "archive" in factor2.columns:
+        if "archive" in f1.columns and "archive" in f2.columns:
             merged = merged.assign(archive=merged.archive_x + merged.archive_y).drop(
                 columns=['archive_x', 'archive_y'])
         return merged
 
-   
 
+    def min_deg(self, network: BayesNet, vars):
+        """Takes a set of variables in the Bayesian Network 
+        and eliminates X based on min-degree heuristics"""
+        results = []
+        int_graph = network.get_interaction_graph()
+        while len(vars) > 0:
+            s = [0 for _ in vars]  #scores
+            for i in range(len(vars)):
+                s[i] = int_graph.degree(vars[i])
+            min_node = vars[np.argmin(s)]  
+        #neighbour connections
+            for n in int_graph.neighbors(min_node):  
+                for k in int_graph.neighbors(min_node):
+                    if k != n:
+                        int_graph.add_edge(k, n)
+        #removal    
+            int_graph.remove_node(min_node)  
+            results.append(min_node)  
+            vars.remove(min_node)  
+        return results
 
+    def min_fill(self, network: BayesNet, vars):
+        """Takes a set of variables in the Bayesian Network 
+        and eliminates X based on min-fill heuristics"""
+        results = []
+        int_graph = network.get_interaction_graph()
+        while len(vars) > 0:
+            scores = [0 for i in vars]
+            for i in range(len(vars)):
+                """The score was calculated as a number of possible connection among neighbours (x_connections) 
+                and number of connection that are actually present (connections)"""
+                connections = 0
+            #connections that could be possible
+                x_connections = len(list(int_graph.neighbors(vars[i]))) * ( 
+                        len(list(int_graph.neighbors(vars[i]))) - 1) / 2
+            # neighbour connections
+                for i in int_graph.neighbors(vars[i]): 
+                    for j in int_graph.neighbors(vars[i]):
+                        if int_graph.has_edge(i, j):
+                            connections += 1
+                scores[i] = x_connections - connections
+            min_node = vars[np.argmin(scores)]
+            for i in int_graph.neighbors(min_node):  
+                for j in int_graph.neighbors(min_node):
+                    if j != i:
+                        int_graph.add_edge(j, i)
+        #removal
+            int_graph.remove_node(min_node)  
+            results.append(min_node)
+            vars.remove(min_node)  
+        return results
 # TODO: This is where your methods should go
