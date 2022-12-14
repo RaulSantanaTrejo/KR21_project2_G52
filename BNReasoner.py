@@ -44,7 +44,7 @@ class BNReasoner:
                 return False
         return True
 
-    def variable_elimination(self, elimination_order: list, input_variable: string):
+    def variable_elimination(self, elimination_order: list, input_variable: str):
 
         for var in elimination_order:
 
@@ -89,7 +89,7 @@ class BNReasoner:
      
     ### MAXING OUT ###
     
-     def max_out(self, cpt: pd.DataFrame, variable: str) -> pd.DataFrame:
+    def max_out(self, cpt: pd.DataFrame, variable: str) -> pd.DataFrame:
         """returns a cpt which contains a new column called archive.
         This column is a record of the previous instances of the maxedout variables and it contains
         a list of touples
@@ -368,5 +368,5 @@ print(reasoner.bn.get_all_variables())
 #print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
 print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
 
-
+print(reasoner.bn.draw_structure)
 # TODO: This is where your methods should go
