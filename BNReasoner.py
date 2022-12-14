@@ -35,12 +35,36 @@ class BNReasoner:
         if change:
             return self.prune(queries, evidence)
 
-    def d_separation(self, X:[str], Y:[str], Z:[str]):
+    def d_separation(self, X: [str], Y: [str], Z :[str]):
         self.prune(X + Y, Z)
         all_combinations = itertools.product(X,Y)
         for (start, end) in all_combinations:
             if networkx.has_path(self.bn.structure, start,end):
                 return False
         return True
+
+    def independent(self, X: [str], Y: [str], Z: [str]):
+        return self.d_separation(X, Y, Z)
+
+    def marginilization(self, f, x:str):
+        Y = self.bn.get_all_variables().remove(x)
+        original_cpt = self.bn.get_cpt(x)
+        new_table_dict = {}
+        for row_num, content in original_cpt.iterrows():
+            key = ()
+            if key in new_table_dict:
+                new_table_dict[key] = new_table_dict[key] + content['p']
+            else:
+                new_table_dict[key] = content['p']
+
+        for key,value in new_table_dict:
+            vars = key.split("_")
+            for var in vars:
+                name_truth =  var.split("=")
+                name = name_truth[0]
+                truth = bool(name_truth[1])
+
+
+
 
         # TODO: This is where your methods should go

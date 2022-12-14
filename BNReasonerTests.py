@@ -28,6 +28,10 @@ class MyTestCase(unittest.TestCase):
         reasoner = BNReasoner('testing/lecture_example.BIFXML')
         self.assertFalse(reasoner.d_separation(['Winter?'], ['Sprinkler?'], ['Rain?']))
 
+    def test_marginalization_1(self):
+        reasoner = BNReasoner('testing/lecture_example.BIFXML')
+        self.assertFalse(reasoner.marginilization(id, 'Sprinkler?'))
+
 
 if __name__ == '__main__':
     unittest.main()
