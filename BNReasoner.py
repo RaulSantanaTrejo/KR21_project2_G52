@@ -255,4 +255,118 @@ class BNReasoner:
             results.append(min_node)
             vars.remove(min_node)  
         return results
+
+
+    def marginal_distribution(self, Q: str, E: dict, elimination_order: list):
+
+        for var in elimination_order:
+
+            if var in E:
+
+                boolean = E[var]
+
+                cpt = self.bn.get_cpt(var)
+
+                row_t = cpt.loc[cpt[var] == boolean]
+
+                # Access the value in column 'p' of the retrieved row
+                value_t = row_t.iloc[0]['p']
+
+                # Convert the value to a float
+                prob_t = pd.to_numeric(value_t, errors='coerce')
+
+                var_children = self.bn.get_children(var)
+
+                for child in var_children:
+                    # get all the cpt's of the children
+                    cpt_child = self.bn.get_cpt(child)
+
+                    # Multiply the values in column 'p' where the corresponding value in column var is True by the float value
+                    cpt_child.loc[cpt_child[var] == boolean, 'p'] = cpt_child.loc[cpt_child[var] == boolean, 'p'] * prob_t
+
+                    # add a condition where the rows that are not in the evidence are deleted
+                    cpt_child = cpt_child.drop(cpt_child[cpt_child[var] != boolean].index)
+
+                    groups = cpt_child.columns.drop(var).drop('p').tolist()
+
+                    # add together the rows with the same values
+                    cpt_child = cpt_child.groupby(groups).sum().reset_index().drop(columns=[var])
+
+                    # update the CPT of the variable
+                    self.bn.update_cpt(child, cpt_child)
+
+            else:
+                cpt = self.bn.get_cpt(var)
+
+                row_t = cpt.loc[cpt[var] == True]
+                row_f = cpt.loc[cpt[var] == False]
+
+                # Access the value in column 'p' of the retrieved row
+                value_t = row_t.iloc[0]['p']
+                value_f = row_f.iloc[0]['p']
+
+                # Convert the value to a float
+                prob_t = pd.to_numeric(value_t, errors='coerce')
+                prob_f = pd.to_numeric(value_f, errors='coerce')
+
+                var_children = self.bn.get_children(var)
+
+                for child in var_children:
+                    # get all the cpt's of the children
+                    cpt_child = self.bn.get_cpt(child)
+
+                    # Multiply the values in column 'p' where the corresponding value in column var is True by the float value
+                    cpt_child.loc[cpt_child[var] == True, 'p'] = cpt_child.loc[cpt_child[var] == True, 'p'] * prob_t
+
+                    # Multiply the values in column 'p' where the corresponding value in column var is False by the float value
+                    cpt_child.loc[cpt_child[var] == False, 'p'] = cpt_child.loc[cpt_child[var] == False, 'p'] * prob_f
+
+                    groups = cpt_child.columns.drop(var).drop('p').tolist()
+
+                    # add together the rows with the same values
+                    cpt_child = cpt_child.groupby(groups).sum().reset_index().drop(columns=[var])
+
+                    # update the CPT of the variable
+                    self.bn.update_cpt(child, cpt_child)
+
+        cpt = self.bn.get_cpt(Q)
+        query = Q
+
+        row_t = cpt.loc[cpt[query] == True]
+        row_f = cpt.loc[cpt[query] == False]
+
+        # Access the value in column 'p' of the retrieved row
+        value_t = row_t.iloc[0]['p']
+        value_f = row_f.iloc[0]['p']
+
+        # Convert the value to a float
+        prob_t = pd.to_numeric(value_t, errors='coerce')
+        prob_f = pd.to_numeric(value_f, errors='coerce')
+
+        product_evidence = 0
+
+        for key in E:
+            value = E[key]
+            cpt = self.bn.get_cpt(key)
+            row_t = cpt.loc[cpt[key] == value]
+            new_value = row_t.iloc[0]['p']
+            float = pd.to_numeric(new_value, errors='coerce')
+            product_evidence += float
+
+
+        # Posterior marginal that Q is True given evidence E
+        q_true = prob_t/product_evidence
+
+        # Posterior marginal that Q is True given evidence E
+        q_false = prob_f/product_evidence
+
+        return q_true, q_false
+
+
+reasoner = BNReasoner('testing/lecture_example.BIFXML')
+print(reasoner.bn.get_all_variables())
+#print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
+print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
+
+
 # TODO: This is where your methods should go
