@@ -363,10 +363,14 @@ class BNReasoner:
         return q_true, q_false
 
 
-reasoner = BNReasoner('testing/lecture_example.BIFXML')
-print(reasoner.bn.get_all_variables())
-#print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
-print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
+reasoner = BNReasoner('use_case.BIFXML')
 
-print(reasoner.bn.draw_structure)
+#print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
+#print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
+
+for var in reasoner.bn.get_all_variables():
+    print(reasoner.bn.get_cpt(var))
+
+reasoner.bn.get_interaction_graph()
+
 # TODO: This is where your methods should go
