@@ -20,6 +20,8 @@ class BNReasoner:
         else:
             self.bn = net
 
+            
+            
     def prune(self, queries: [str], evidence:[str]):
         change = False
         for variable in self.bn.get_all_variables():
@@ -36,6 +38,8 @@ class BNReasoner:
         if change:
             return self.prune(queries, evidence)
 
+        
+        
     def d_separation(self, X:[str], Y:[str], Z:[str]):
         self.prune(X + Y, Z)
         all_combinations = itertools.product(X,Y)
@@ -44,6 +48,8 @@ class BNReasoner:
                 return False
         return True
 
+    
+    
     def variable_elimination(self, elimination_order: list, input_variable: str):
 
         for var in elimination_order:
@@ -84,49 +90,70 @@ class BNReasoner:
                 cpt_2 = self.bn.get_cpt(child)
 
         return self.bn.get_cpt(input_variable)
+       
     
     
-     
-    ### MAXING OUT ###
-    
-    def max_out(self, cpt: pd.DataFrame, variable: str) -> pd.DataFrame:
-        """returns a cpt which contains a new column called archive.
-        This column is a record of the previous instances of the maxedout variables and it contains
-        a list of touples
+    def max_out(self, cpt: pd.DataFrame, var: str) -> pd.DataFrame:
+        """Creates a new cpt with an additional column: memory
+        memory keeps track of which instantiation of X led to maximized value.
+        It is saved as a list of touples
         """
-        if variable not in cpt.columns:
-            print("variable we are tryng to max out is not in cpt")
-            return None
-
-        if [variable] == [c for c in cpt.columns if c != 'p' and c != 'archive']:
-            print("ERROR in trying to maxout: variable is alone in the cpt, cant be maxed out")
+        
+        if [var] == [col for col in cpt.columns if col != 'p' and col != 'memory']:
+            print("ERROR: variable cannot be maxed out")
             exit()
             return None
 
-        the_forbidden_list = [variable, 'p', 'archive']
-        group_var = [x for x in cpt.columns if x not in the_forbidden_list]
-        # print("grouping for: ",group_var)
+        if var not in cpt.columns:
+            print("ERROR: variable is not in cpt")
+            return None
 
-        new_cpt = cpt.loc[cpt.groupby(group_var)['p'].idxmax()]  # BLESS
-        # print("new cpt after groupby: \n",new_cpt)
-        if "archive" not in new_cpt.columns:  # if it is the first time
+        excl_list = [var, 'p', 'memory']
+        group_var = [col for col in cpt.columns if col not in excl_list]
+        cpt_new = cpt.loc[cpt.groupby(group_var)['p'].idxmax()]
+        
+        if "memory" not in cpt_new.columns:  
             list_dict = []
-            for i, row in new_cpt.iterrows():
-                # list_dict.append({var:row[var]}) #First approach was with dictionaries
-                list_dict.append([(variable, row[variable])])
-            new_cpt.insert(0, "archive", list_dict)
+            for i, row in cpt_new.iterrows():
+                list_dict.append([(var, row[var])])
+            cpt_new.insert(0, "memory", list_dict)
         else:
-            for i, row in new_cpt.iterrows():
-                # archive_dict=row["archive"]
-                # archive_dict[var]=row[var]
-                # row["archive"]=archive_dict
-                archive_list = row["archive"]
-                archive_list.append((variable, row[variable]))
-                row["archive"] = archive_list
+            for i, row in cpt_new.iterrows():           
+                memory_list = row["memory"]
+                memory_list.append((var, row[var]))
+                row["memory"] = memory_list
+        cpt_new = cpt_new.drop(var, 1)
+        return cpt_new
+    
+    
+    
+    def sum_out(self, cpt: pd.DataFrame, var: str) -> pd.DataFrame:
+        """Creates a new cpt without the variable var and probabilities after sum"""
+        if [var] == [col for col in cpt.columns if col != 'p' and col != 'memory']:
+            print("ERROR : variable cannot be summed out")
+            exit()
+            return None
+        var_new = [var for var in cpt.columns if var != var]
+        cpt_new = cpt[var_new].copy()
+        # print("group by criteria:",[x for x in new_var if x != 'p'])
+        res = pd.DataFrame(cpt_new.groupby([var for var in var_new if var != 'p'])['p'].sum()).reset_index()
+        return res
 
-        new_cpt = new_cpt.drop(variable, 1)
-
-        return new_cpt
+    
+    
+    def in_cpt(self, cpt: pd.DataFrame, V: str) -> bool:
+        """True if V is a column of cpt"""
+        if [var for var in cpt.columns if var == V]:
+            return True
+        else:
+            return False
+    
+    
+    
+    def rnd_ord(self, network: BayesNet, vars):
+        results = random.sample(vars, k=len(vars))
+        return results
+    
     
     
     def factor_multiplication(self, cpt_set: List[pd.DataFrame]) -> pd.DataFrame:
@@ -180,6 +207,18 @@ class BNReasoner:
                 cpt_results.loc[i, 'p'] *= right_row['p'].values[0]
         return cpt_results
 
+    
+    
+    def multiply_factors(self, f1: pd.DataFrame, f2: pd.DataFrame, c_vars: List[str]) -> pd.DataFrame:
+        merged = f1.merge(f2, on=c_vars, how='inner')
+        merged = merged.assign(p=merged.p_x * merged.p_y, ).drop(columns=['p_x', 'p_y'])
+        if "archive" in f1.columns and "archive" in f2.columns:
+            merged = merged.assign(archive=merged.archive_x + merged.archive_y).drop(
+                columns=['archive_x', 'archive_y'])
+        return merged
+    
+    
+    
     def factor_multiplication_many(self, factors: List[pd.DataFrame]) -> pd.DataFrame:
         if len(factors) == 1:
             return factors[0]
@@ -189,31 +228,26 @@ class BNReasoner:
                 c_vars = list(result.columns.intersection(factors[i].columns)) #common variables
                 if 'p' in c_vars:
                     c_vars.remove('p')
-                if "archive" in c_vars:
-                    c_vars.remove("archive")
+                if "memory" in c_vars:
+                    c_vars.remove("memory")
                 if len(c_vars) > 0:
                     result = self.multiply_factors(result, factors[i], c_vars)
             return result
     
-    def multiply_factors(self, f1: pd.DataFrame, f2: pd.DataFrame, c_vars: List[str]) -> pd.DataFrame:
-        merged = f1.merge(f2, on=c_vars, how='inner')
-        merged = merged.assign(p=merged.p_x * merged.p_y, ).drop(columns=['p_x', 'p_y'])
-        if "archive" in f1.columns and "archive" in f2.columns:
-            merged = merged.assign(archive=merged.archive_x + merged.archive_y).drop(
-                columns=['archive_x', 'archive_y'])
-        return merged
-
-
+    
+    
     def min_deg(self, network: BayesNet, vars):
-        """Takes a set of variables in the Bayesian Network 
-        and eliminates X based on min-degree heuristics"""
+    """Takes a set of variables in the Bayesian Network 
+    and eliminates X based on min-degree heuristics"""
         results = []
         int_graph = network.get_interaction_graph()
+
         while len(vars) > 0:
             s = [0 for _ in vars]  #scores
             for i in range(len(vars)):
                 s[i] = int_graph.degree(vars[i])
             min_node = vars[np.argmin(s)]  
+    
         #neighbour connections
             for n in int_graph.neighbors(min_node):  
                 for k in int_graph.neighbors(min_node):
@@ -223,22 +257,27 @@ class BNReasoner:
             int_graph.remove_node(min_node)  
             results.append(min_node)  
             vars.remove(min_node)  
+
         return results
 
+    
+    
     def min_fill(self, network: BayesNet, vars):
-        """Takes a set of variables in the Bayesian Network 
-        and eliminates X based on min-fill heuristics"""
+    """Takes a set of variables in the Bayesian Network 
+    and eliminates X based on min-fill heuristics"""
         results = []
         int_graph = network.get_interaction_graph()
         while len(vars) > 0:
             scores = [0 for i in vars]
             for i in range(len(vars)):
-                """The score was calculated as a number of possible connection among neighbours (x_connections) 
-                and number of connection that are actually present (connections)"""
+                """Scores are calculated as the number of connection that 
+                are possible and the actual connection among neighbours"""
                 connections = 0
+
             #connections that could be possible
                 x_connections = len(list(int_graph.neighbors(vars[i]))) * ( 
-                        len(list(int_graph.neighbors(vars[i]))) - 1) / 2
+                    len(list(int_graph.neighbors(vars[i]))) - 1) / 2
+
             # neighbour connections
                 for i in int_graph.neighbors(vars[i]): 
                     for j in int_graph.neighbors(vars[i]):
@@ -361,12 +400,102 @@ class BNReasoner:
         q_false = prob_f/product_evidence
 
         return q_true, q_false
+    
+    
+    
+    def MAP(self, net: BayesNet, queries: List[str], e: pd.Series, heuristic: str) -> dict:
+        net = copy.deepcopy(net)
+        """Computes maximum a-posteriority instanstiation and value of variables Q, given evidence e (possibly empty)"""
+        net = self.prune(net, queries, e)
+        not_queries = [i for i in net.get_all_variables() if i not in queries]
+        if heuristic == "fill":
+            ord = self.min_fill(net, not_queries)
+        elif heuristic == "deg":
+            ord = self.min_deg(net, not_queries)
+        elif heuristic == "random":
+            ord = self.rnd_ord(net, not_queries)
+        CIT = [net.get_compatible_instantiations_table(e, c).reset_index(drop=True) for c in
+             net.get_all_cpts().values()]
+        ord.extend(queries)
+        results_dict = {}
+        print("Determining MAP for: {}, assuming: {}".format(queries, e.to_dict()))
+        print("Order: {}".format(ord))
+        for var in ord:
+            print("Used variable: {}".format(var))
+            imp_factors = [f.reset_index(drop=True) for f in CIT if self.var_in_cpt(f, var)]
+            t_factor = self.factor_multiplication_many(imp_factors)
+            if len(t_factor.columns) <= 3 and "memory" in t_factor.columns:  
+                results_idx = t_factor['p'].idxmax()
+                results_dict[var] = t_factor.at[results_idx, var]
+                for t in t_factor.at[results_idx, "memory"]:
+                    results_dict[t[0]] = t[1]
+                continue
+            if len(t_factor.columns) <= 2:  
+                if var in queries:
+                    results_idx = t_factor['p'].idxmax()
+
+                    results_dict[var] = t_factor.at[results_idx, var]
+                    CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
+                    continue
+                else:
+                    CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
+                    continue
+            if var not in queries:
+                t_factor = self.sum_out(t_factor, var)
+                CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
+                CIT.append(t_factor)
+            else:
+                t_factor = self.max_out(t_factor, var)
+                CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
+                CIT.append(t_factor)
+        return results_dict
+    
+    
+    
+    def MPE(self, net: BayesNet, e: pd.Series, heuristic: str) -> dict:
+        net = copy.deepcopy(net)
+        """Compute the most probable explanation given an evidence e"""
+        
+        l1 = [i for i in net.get_all_variables()]
+        l2 = list(dict(e).keys())
+        queries = [x for x in l1 if x not in l2]
+        net = self.prune(net, queries, e)
+        if heuristic == "fill":
+            ord = self.min_fill(net, l1)
+        elif heuristic == "deg":
+            ord = self.min_deg(net, l1)
+        elif heuristic == "random":
+            ord = self.rnd_ord(net, l1)
+        CIT = [net.get_compatible_instantiations_table(e, c).reset_index(drop=True) for c in
+             net.get_all_cpts().values()]
+        print("Determining MPE assuming: {} {}".format(e.to_dict()))
+        print("Order: {}".format(ord))
+        results_dict = {}
+        for var in ord:
+            print("Used variable: {}".format(var))
+            relevant_factors = [i.reset_index(drop=True) for i in CIT if self.in_cpt(i, var)]
+            t_factor = self.factor_multiplication_many(relevant_factors)
+            if len(t_factor.columns) <= 3 and "memory" in t_factor.columns:  
+                result_idx = t_factor['p'].idxmax()
+                results_dict[var] = t_factor.at[result_idx, var]
+                for t in t_factor.at[result_idx, "memory"]:
+                    results_dict[t[0]] = t[1]
+                results_dict['p'] = t_factor.at[result_idx, 'p']
+                continue
+            t_factor = self.max_out(t_factor, var)
+            CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
+            CIT.append(t_factor)
+        return results_dict
 
 
-reasoner = BNReasoner('testing/lecture_example.BIFXML')
-print(reasoner.bn.get_all_variables())
+reasoner = BNReasoner('use_case.BIFXML')
+
 #print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
-print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
+#print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
 
-print(reasoner.bn.draw_structure)
+for var in reasoner.bn.get_all_variables():
+    print(reasoner.bn.get_cpt(var))
+
+reasoner.bn.get_interaction_graph()
+
 # TODO: This is where your methods should go
