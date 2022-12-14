@@ -1,5 +1,9 @@
+import copy
 import itertools
+from random import random
 from typing import Union, List
+
+import numpy as np
 import pandas as pd
 
 import networkx
@@ -49,7 +53,6 @@ class BNReasoner:
         return True
 
     
-    
     def variable_elimination(self, elimination_order: list, input_variable: str):
 
         for var in elimination_order:
@@ -90,9 +93,7 @@ class BNReasoner:
                 cpt_2 = self.bn.get_cpt(child)
 
         return self.bn.get_cpt(input_variable)
-       
-    
-    
+
     def max_out(self, cpt: pd.DataFrame, var: str) -> pd.DataFrame:
         """Creates a new cpt with an additional column: memory
         memory keeps track of which instantiation of X led to maximized value.
@@ -109,7 +110,7 @@ class BNReasoner:
             return None
 
         excl_list = [var, 'p', 'memory']
-        group_var = [col for col in cpt.columns if col not in excl_list]
+        group_var = [col for col in cpt.columns if col not in excl_list and not col.startswith('memory')]
         cpt_new = cpt.loc[cpt.groupby(group_var)['p'].idxmax()]
         
         if "memory" not in cpt_new.columns:  
@@ -148,14 +149,7 @@ class BNReasoner:
         else:
             return False
     
-    
-    
-    def rnd_ord(self, network: BayesNet, vars):
-        results = random.sample(vars, k=len(vars))
-        return results
-    
-    
-    
+
     def factor_multiplication(self, cpt_set: List[pd.DataFrame]) -> pd.DataFrame:
         """Input: a list of cpts 
            Output: result of factor moltiplication between the cpts"""
@@ -237,8 +231,8 @@ class BNReasoner:
     
     
     def min_deg(self, network: BayesNet, vars):
-    """Takes a set of variables in the Bayesian Network 
-    and eliminates X based on min-degree heuristics"""
+        """Takes a set of variables in the Bayesian Network
+        and eliminates X based on min-degree heuristics"""
         results = []
         int_graph = network.get_interaction_graph()
 
@@ -263,8 +257,8 @@ class BNReasoner:
     
     
     def min_fill(self, network: BayesNet, vars):
-    """Takes a set of variables in the Bayesian Network 
-    and eliminates X based on min-fill heuristics"""
+        """Takes a set of variables in the Bayesian Network
+        and eliminates X based on min-fill heuristics"""
         results = []
         int_graph = network.get_interaction_graph()
         while len(vars) > 0:
@@ -279,11 +273,12 @@ class BNReasoner:
                     len(list(int_graph.neighbors(vars[i]))) - 1) / 2
 
             # neighbour connections
-                for i in int_graph.neighbors(vars[i]): 
-                    for j in int_graph.neighbors(vars[i]):
-                        if int_graph.has_edge(i, j):
+                for j in int_graph.neighbors(vars[i]):
+                    for h in int_graph.neighbors(vars[i]):
+                        if int_graph.has_edge(j, h):
                             connections += 1
                 scores[i] = x_connections - connections
+
             min_node = vars[np.argmin(scores)]
             for i in int_graph.neighbors(min_node):  
                 for j in int_graph.neighbors(min_node):
@@ -400,9 +395,7 @@ class BNReasoner:
         q_false = prob_f/product_evidence
 
         return q_true, q_false
-    
-    
-    
+
     def MAP(self, net: BayesNet, queries: List[str], e: pd.Series, heuristic: str) -> dict:
         net = copy.deepcopy(net)
         """Computes maximum a-posteriority instanstiation and value of variables Q, given evidence e (possibly empty)"""
@@ -412,8 +405,7 @@ class BNReasoner:
             ord = self.min_fill(net, not_queries)
         elif heuristic == "deg":
             ord = self.min_deg(net, not_queries)
-        elif heuristic == "random":
-            ord = self.rnd_ord(net, not_queries)
+
         CIT = [net.get_compatible_instantiations_table(e, c).reset_index(drop=True) for c in
              net.get_all_cpts().values()]
         ord.extend(queries)
@@ -421,7 +413,6 @@ class BNReasoner:
         print("Determining MAP for: {}, assuming: {}".format(queries, e.to_dict()))
         print("Order: {}".format(ord))
         for var in ord:
-            print("Used variable: {}".format(var))
             imp_factors = [f.reset_index(drop=True) for f in CIT if self.var_in_cpt(f, var)]
             t_factor = self.factor_multiplication_many(imp_factors)
             if len(t_factor.columns) <= 3 and "memory" in t_factor.columns:  
@@ -450,31 +441,29 @@ class BNReasoner:
                 CIT.append(t_factor)
         return results_dict
     
-    
-    
-    def MPE(self, net: BayesNet, e: pd.Series, heuristic: str) -> dict:
+    def MPE(self, net: BayesNet, e: pd.Series, heuristic: str, pruning: bool) -> dict:
         net = copy.deepcopy(net)
         """Compute the most probable explanation given an evidence e"""
         
         l1 = [i for i in net.get_all_variables()]
         l2 = list(dict(e).keys())
         queries = [x for x in l1 if x not in l2]
-        net = self.prune(net, queries, e)
+        if pruning:
+            self.prune(queries, list(e.keys()))
         if heuristic == "fill":
             ord = self.min_fill(net, l1)
         elif heuristic == "deg":
             ord = self.min_deg(net, l1)
-        elif heuristic == "random":
-            ord = self.rnd_ord(net, l1)
+
         CIT = [net.get_compatible_instantiations_table(e, c).reset_index(drop=True) for c in
              net.get_all_cpts().values()]
-        print("Determining MPE assuming: {} {}".format(e.to_dict()))
-        print("Order: {}".format(ord))
+        # print("Order: {0}".format(ord))
         results_dict = {}
         for var in ord:
-            print("Used variable: {}".format(var))
+            # print("Used variable: {}".format(var))
             relevant_factors = [i.reset_index(drop=True) for i in CIT if self.in_cpt(i, var)]
             t_factor = self.factor_multiplication_many(relevant_factors)
+
             if len(t_factor.columns) <= 3 and "memory" in t_factor.columns:  
                 result_idx = t_factor['p'].idxmax()
                 results_dict[var] = t_factor.at[result_idx, var]
@@ -487,15 +476,15 @@ class BNReasoner:
             CIT.append(t_factor)
         return results_dict
 
-
-reasoner = BNReasoner('use_case.BIFXML')
-
-#print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
-#print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
-
-for var in reasoner.bn.get_all_variables():
-    print(reasoner.bn.get_cpt(var))
-
-reasoner.bn.get_interaction_graph()
-
-# TODO: This is where your methods should go
+#
+# reasoner = BNReasoner('use_case.BIFXML')
+#
+# #print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
+# #print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
+#
+# for var in reasoner.bn.get_all_variables():
+#     print(reasoner.bn.get_cpt(var))
+#
+# reasoner.bn.get_interaction_graph()
+#
+# # TODO: This is where your methods should go

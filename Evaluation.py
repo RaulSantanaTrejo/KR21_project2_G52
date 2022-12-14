@@ -20,12 +20,11 @@ def time_sink():
     seconds = abs(np.random.normal(loc=0.0001, scale=0.00005, size=1)[0])
     time.sleep(seconds)
 
-def generate_query_evidence_pairs(variables: [str]):
-    all_orders = list(itertools.permutations(variables))
-    all_partitions = [{"query": tuple(sorted(o[:i])), "evidence": list(o[i:])} for o in all_orders for i in range(len(o))]
-
-    final_result = pd.DataFrame(all_partitions).groupby("query").agg('first')
-    return final_result
+def all_evidence_combos(variables: [str]):
+    all_combos = []
+    [all_combos.extend(itertools.combinations(variables, i+1)) for i in range(len(variables))]
+    all_combos = list(map(list, all_combos))
+    return all_combos
 
 
 def solve_with_pruning(query: [str], evidence: dict, heuristic:str, reasoner: BNReasoner):
@@ -42,37 +41,28 @@ def solve_with_pruning(query: [str], evidence: dict, heuristic:str, reasoner: BN
     # reasoner.mpe_pruning(query, evidence, h)
 
 
-def solve_without_pruning(query: [str], evidence: dict, heuristic:str, reasoner: BNReasoner):
-    h = None
-    if heuristic == 'min-fill':
-        h = reasoner.min_fill
-    elif heuristic == 'min-deg':
-        h = reasoner.min_deg
-
-    evidence = {}
-    time_sink()
 
     #reasoner.mpe_nonpruning(query, evidence, h)
 
 
-def run_experiment(experiment_name, solver, heuristic: str, iterations: int):
+def run_experiment(experiment_name, pruning:bool, heuristic: str, iterations: int):
     runtimes = []
-    default_reasoner = BNReasoner('testing/lecture_example.BIFXML')
-    all_partitions = generate_query_evidence_pairs(default_reasoner.bn.get_all_variables())
+    default_reasoner = BNReasoner('testing/use_case.BIFXML')
+    all_combos = all_evidence_combos(default_reasoner.bn.get_all_variables())
     count = 0
-    for query, row in all_partitions.iterrows():
-        count = count + 1
-        print("PARTITION: ", count)
-        query = list(query)
-        evidence = {}
-        for var in row['evidence']:
-            evidence[var] = True
+    for evidence_combo in all_combos:
+        evidence_dict = {}
+        for var in evidence_combo:
+            evidence_dict[var] = True
 
+        evidence = pd.Series(evidence_dict)
+        count = count + 1
+        print("EVIDENCE SET: ", count)
         for _ in range(iterations):
             reasoner = deepcopy(default_reasoner)
             start = datetime.now()
-            solver(query, evidence, heuristic, reasoner)
-            runtimes.append((datetime.now() - start).microseconds)
+            reasoner.MPE(reasoner.bn, evidence, heuristic, pruning)
+            runtimes.append((datetime.now() - start).total_seconds())
 
     plt.boxplot(runtimes)
     plt.savefig(fname="experiments/"+experiment_name)
@@ -89,4 +79,7 @@ def run_experiment(experiment_name, solver, heuristic: str, iterations: int):
 
 
 if __name__ == '__main__':
-    run_experiment("TEST", solver=solve_with_pruning, heuristic="min-deg", iterations=100)
+    run_experiment("PRUNE_FILL",pruning=True, heuristic="fill", iterations=100)
+    run_experiment("NO_PRUNE_FILL",pruning=False, heuristic="fill", iterations=100)
+    run_experiment("NO_PRUNE_DEG",pruning=False, heuristic="deg", iterations=100)
+    run_experiment("PRUNE_DEG",pruning=True, heuristic="deg", iterations=100)
