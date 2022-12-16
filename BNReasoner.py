@@ -371,6 +371,6 @@ reasoner = BNReasoner('use_case.BIFXML')
 for var in reasoner.bn.get_all_variables():
     print(reasoner.bn.get_cpt(var))
 
-reasoner.bn.get_interaction_graph()
+print(reasoner.bn.draw_structure())
 
 # TODO: This is where your methods should go
