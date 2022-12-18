@@ -450,15 +450,15 @@ class BNReasoner:
         queries = list(filter(lambda var: var not in e.keys(), self.bn.get_all_variables()))
         return self.MAP(queries, e, heuristic, pruning)
 
-#
-# reasoner = BNReasoner('use_case.BIFXML')
-#
-# #print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
-# #print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
-#
-# for var in reasoner.bn.get_all_variables():
-#     print(reasoner.bn.get_cpt(var))
-#
-# reasoner.bn.get_interaction_graph()
-#
+
+reasoner = BNReasoner('testing/use_case.BIFXML')
+print(reasoner.bn.get_all_variables())
+
+for var in reasoner.bn.get_all_variables():
+    print(reasoner.bn.get_cpt(var))
+
+mar = reasoner.marginal_distribution('Feeling_happy', {'Work_on_assignment': True, 'Study_exam': True}, [])
+print(mar)
+
+
 # # TODO: This is where your methods should go

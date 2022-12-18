@@ -41,11 +41,11 @@ class MyTestCase(unittest.TestCase):
 
     def test_variable_elimination(self):
         reasoner = BNReasoner('testing/lecture_example.BIFXML')
-        reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?'))
+        print(reasoner.variable_elimination(['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'], 'Slippery Road?')))
 
-    def test_marginalization(self):
+    def test_marginal_distribution(self):
         reasoner = BNReasoner('testing/lecture_example.BIFXML')
-        reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?'])
+        print(reasoner.marginal_distribution('Sprinkler?', {'Winter?': True, 'Rain?': False}, ['Winter?', 'Sprinkler?', 'Rain?', 'Wet Grass?', 'Slippery Road?']))
 
 
 
