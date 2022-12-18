@@ -437,7 +437,7 @@ class BNReasoner:
                     CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                     continue
             if var not in queries:
-                t_factor = self.sum_out(t_factor, var)
+                t_factor = self.marginalization(t_factor, var)
                 CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                 CIT.append(t_factor)
             else:
