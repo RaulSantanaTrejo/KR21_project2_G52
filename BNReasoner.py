@@ -55,7 +55,7 @@ class BNReasoner:
     def independent(self, X:[str], Y:[str], Z:[str]):
         return self.d_separation(X,Y,Z)
 
-    
+
     def variable_elimination(self, elimination_order: list, input_variable: str):
 
         for var in elimination_order:
@@ -143,6 +143,7 @@ class BNReasoner:
         group_vars = [var for var in var_new if var != 'p']
         res = pd.DataFrame(cpt_new.groupby(group_vars)['p'].sum()).reset_index()
         return res
+
     
     
     def in_cpt(self, cpt: pd.DataFrame, V: str) -> bool:
@@ -436,7 +437,7 @@ class BNReasoner:
                     CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                     continue
             if var not in queries:
-                t_factor = self.marginalization(t_factor, var)
+                t_factor = self.sum_out(t_factor, var)
                 CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                 CIT.append(t_factor)
             else:
