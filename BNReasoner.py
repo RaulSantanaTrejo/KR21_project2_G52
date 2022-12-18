@@ -437,7 +437,7 @@ class BNReasoner:
                     CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                     continue
             if var not in queries:
-                t_factor = self.sum_out(t_factor, var)
+                t_factor = self.marginalization(t_factor, var)
                 CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                 CIT.append(t_factor)
             else:
@@ -451,14 +451,22 @@ class BNReasoner:
         return self.MAP(queries, e, heuristic, pruning)
 
 
+# Below are the queries for our use case
 reasoner = BNReasoner('testing/use_case.BIFXML')
 print(reasoner.bn.get_all_variables())
 
-for var in reasoner.bn.get_all_variables():
-    print(reasoner.bn.get_cpt(var))
 
-mar = reasoner.marginal_distribution('Feeling_happy', {'Work_on_assignment': True, 'Study_exam': True}, [])
-print(mar)
+posterior_marginal = reasoner.marginal_distribution('Feeling_happy', {'Work_on_assignment': True, 'Study_exam': True}, [])
+prior_marginal = reasoner.marginal_distribution('Feeling_happy', {}, [])
+
+evidence = pd.Series({'Work_on_assignment':True})
+MAP = reasoner.MAP(['Feeling_happy','Keep_motivation'], evidence, "fill", False)
+MEP = reasoner.MPE(evidence, "fill", False)
+
+print(MAP)
+print(MEP)
+print(prior_marginal)
+print(posterior_marginal)
 
 
 # # TODO: This is where your methods should go
