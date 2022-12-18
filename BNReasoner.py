@@ -52,6 +52,9 @@ class BNReasoner:
                 return False
         return True
 
+    def independent(self, X:[str], Y:[str], Z:[str]):
+        return self.d_separation(X,Y,Z)
+
     
     def variable_elimination(self, elimination_order: list, input_variable: str):
 
@@ -128,18 +131,18 @@ class BNReasoner:
     
     
     
-    def sum_out(self, cpt: pd.DataFrame, var: str) -> pd.DataFrame:
+    def marginalization(self, cpt: pd.DataFrame, var_sum: str) -> pd.DataFrame:
         """Creates a new cpt without the variable var and probabilities after sum"""
-        if [var] == [col for col in cpt.columns if col != 'p' and col != 'memory']:
+        if [var_sum] == [col for col in cpt.columns if col != 'p' and col != 'memory']:
             print("ERROR : variable cannot be summed out")
             exit()
             return None
-        var_new = [var for var in cpt.columns if var != var]
+        var_new = [var for var in cpt.columns if var != var_sum]
         cpt_new = cpt[var_new].copy()
         # print("group by criteria:",[x for x in new_var if x != 'p'])
-        res = pd.DataFrame(cpt_new.groupby([var for var in var_new if var != 'p'])['p'].sum()).reset_index()
+        group_vars = [var for var in var_new if var != 'p']
+        res = pd.DataFrame(cpt_new.groupby(group_vars)['p'].sum()).reset_index()
         return res
-
     
     
     def in_cpt(self, cpt: pd.DataFrame, V: str) -> bool:
@@ -396,10 +399,11 @@ class BNReasoner:
 
         return q_true, q_false
 
-    def MAP(self, net: BayesNet, queries: List[str], e: pd.Series, heuristic: str) -> dict:
-        net = copy.deepcopy(net)
+    def MAP(self, queries: List[str], e: pd.Series, heuristic: str, pruning: bool) -> dict:
         """Computes maximum a-posteriority instanstiation and value of variables Q, given evidence e (possibly empty)"""
-        net = self.prune(net, queries, e)
+        net = self.bn
+        if pruning:
+            self.prune(queries, list(e.keys()))
         not_queries = [i for i in net.get_all_variables() if i not in queries]
         if heuristic == "fill":
             ord = self.min_fill(net, not_queries)
@@ -410,10 +414,10 @@ class BNReasoner:
              net.get_all_cpts().values()]
         ord.extend(queries)
         results_dict = {}
-        print("Determining MAP for: {}, assuming: {}".format(queries, e.to_dict()))
-        print("Order: {}".format(ord))
+        # print("Determining MAP for: {}, assuming: {}".format(queries, e.to_dict()))
+        # print("Order: {}".format(ord))
         for var in ord:
-            imp_factors = [f.reset_index(drop=True) for f in CIT if self.var_in_cpt(f, var)]
+            imp_factors = [f.reset_index(drop=True) for f in CIT if self.in_cpt(f, var)]
             t_factor = self.factor_multiplication_many(imp_factors)
             if len(t_factor.columns) <= 3 and "memory" in t_factor.columns:  
                 results_idx = t_factor['p'].idxmax()
@@ -432,7 +436,7 @@ class BNReasoner:
                     CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                     continue
             if var not in queries:
-                t_factor = self.sum_out(t_factor, var)
+                t_factor = self.marginalization(t_factor, var)
                 CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
                 CIT.append(t_factor)
             else:
@@ -441,40 +445,9 @@ class BNReasoner:
                 CIT.append(t_factor)
         return results_dict
     
-    def MPE(self, net: BayesNet, e: pd.Series, heuristic: str, pruning: bool) -> dict:
-        net = copy.deepcopy(net)
-        """Compute the most probable explanation given an evidence e"""
-        
-        l1 = [i for i in net.get_all_variables()]
-        l2 = list(dict(e).keys())
-        queries = [x for x in l1 if x not in l2]
-        if pruning:
-            self.prune(queries, list(e.keys()))
-        if heuristic == "fill":
-            ord = self.min_fill(net, l1)
-        elif heuristic == "deg":
-            ord = self.min_deg(net, l1)
-
-        CIT = [net.get_compatible_instantiations_table(e, c).reset_index(drop=True) for c in
-             net.get_all_cpts().values()]
-        # print("Order: {0}".format(ord))
-        results_dict = {}
-        for var in ord:
-            # print("Used variable: {}".format(var))
-            relevant_factors = [i.reset_index(drop=True) for i in CIT if self.in_cpt(i, var)]
-            t_factor = self.factor_multiplication_many(relevant_factors)
-
-            if len(t_factor.columns) <= 3 and "memory" in t_factor.columns:  
-                result_idx = t_factor['p'].idxmax()
-                results_dict[var] = t_factor.at[result_idx, var]
-                for t in t_factor.at[result_idx, "memory"]:
-                    results_dict[t[0]] = t[1]
-                results_dict['p'] = t_factor.at[result_idx, 'p']
-                continue
-            t_factor = self.max_out(t_factor, var)
-            CIT = [i.reset_index(drop=True) for i in CIT if not self.in_cpt(i, var)]
-            CIT.append(t_factor)
-        return results_dict
+    def MPE(self, e: pd.Series, heuristic: str, pruning: bool) -> dict:
+        queries = list(filter(lambda var: var not in e.keys(), self.bn.get_all_variables()))
+        return self.MAP(queries, e, heuristic, pruning)
 
 #
 # reasoner = BNReasoner('use_case.BIFXML')

@@ -61,8 +61,9 @@ def run_experiment(experiment_name, pruning:bool, heuristic: str, iterations: in
         for _ in range(iterations):
             reasoner = deepcopy(default_reasoner)
             start = datetime.now()
-            reasoner.MPE(reasoner.bn, evidence, heuristic, pruning)
-            runtimes.append((datetime.now() - start).total_seconds())
+            reasoner.MPE(evidence, heuristic, pruning)
+            runtime = (datetime.now() - start).total_seconds()
+            runtimes.append(runtime)
 
     plt.boxplot(runtimes)
     plt.savefig(fname="experiments/"+experiment_name)
@@ -79,7 +80,8 @@ def run_experiment(experiment_name, pruning:bool, heuristic: str, iterations: in
 
 
 if __name__ == '__main__':
-    run_experiment("PRUNE_FILL",pruning=True, heuristic="fill", iterations=100)
-    run_experiment("NO_PRUNE_FILL",pruning=False, heuristic="fill", iterations=100)
-    run_experiment("NO_PRUNE_DEG",pruning=False, heuristic="deg", iterations=100)
-    run_experiment("PRUNE_DEG",pruning=True, heuristic="deg", iterations=100)
+    iterations = 50
+    run_experiment("PRUNE_FILL", pruning=True, heuristic="fill", iterations=iterations)
+    run_experiment("NO_PRUNE_FILL", pruning=False, heuristic="fill", iterations=iterations)
+    run_experiment("NO_PRUNE_DEG", pruning=False, heuristic="deg", iterations=iterations)
+    run_experiment("PRUNE_DEG", pruning=True, heuristic="deg", iterations=iterations)

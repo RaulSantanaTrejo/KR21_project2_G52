@@ -35,6 +35,10 @@ class MyTestCase(unittest.TestCase):
         self.assertEquals(new_cpt.iloc[0]['p'], 1.3)
         self.assertEquals(new_cpt.iloc[1]['p'], 0.7)
 
+    def test_draw_graph(self):
+        default_reasoner = BNReasoner('testing/use_case.BIFXML')
+        default_reasoner.bn.draw_structure()
+
 
 if __name__ == '__main__':
     unittest.main()
