@@ -51,3 +51,20 @@ class MyTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+    
+    
+
+
+reasoner = BNReasoner('testing/lecture_example.BIFXML')
+f = reasoner.bn.get_cpt('Slippery Road?')
+
+### - test max out
+new_cpt = reasoner.max_out(f, 'Rain?')
+#print(new_cpt)
+
+
+
+### - test MAP and MPE
+evidence = pd.Series({'Winter?':True})
+reasoner.MAP(['Sprinkler?','Wet Grass?'], evidence, "fill", False)
+reasoner.MPE(evidence, "fill", False)
